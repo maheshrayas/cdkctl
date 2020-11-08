@@ -1,4 +1,4 @@
-module github.com/maheshrayas/cdkdeploy
+module github.com/maheshrayas/cdkctl
 
 go 1.14
 

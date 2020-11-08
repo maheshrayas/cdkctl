@@ -6,7 +6,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/maheshrayas/cdkdeploy/pkg"
+	"github.com/maheshrayas/cdkctl/pkg"
 	"gopkg.in/alecthomas/kingpin.v2"
 )
 
