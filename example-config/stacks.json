@@ -1,7 +1,7 @@
 {
     "stacks":[
-           "stackname"
-    ],
-    "verbose":false,
-    "trace":false
+           "stackname1",
+           "stackname2",
+           "stackname3",
+    ]
 }

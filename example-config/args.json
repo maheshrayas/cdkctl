@@ -1,3 +1,4 @@
 {
-"sample":"tst"
+"sample":"tst",
+"image": "env.IMAGENAME"
 }
