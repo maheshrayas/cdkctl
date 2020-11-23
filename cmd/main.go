@@ -21,11 +21,12 @@ func main() {
 	)
 	app := kingpin.New(os.Args[0], help)
 	// stack := app.Flag("stack", stackFileHelp).Required().String()
-	stackFile := app.Flag("stacks-file", stackFileHelp).Required().String()
-	toolKit := app.Flag("tool-kit", toolKitNameHelp).Required().String()
+	stackFile := app.Flag("stacks-file", stackFileHelp).Required().String() //.Required()
+	toolKit := app.Flag("tool-kit", toolKitNameHelp).String()               //Required()
 	environment := app.Flag("environment", environmentHelp).String()
 	args := app.Flag("args", runtimeArgsHelp).String()
 	batch := app.Flag("batch", batchHelp).String()
+
 	if _, err := app.Parse(os.Args[1:]); err != nil {
 		log.Fatal(err)
 	}
