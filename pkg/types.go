@@ -18,6 +18,9 @@ type Processing struct {
 	stacks []string
 	status map[string]string
 }
+type Stackgroup struct {
+	stackgp map[string][]string
+}
 
 type Config struct {
 	Stacks []struct {

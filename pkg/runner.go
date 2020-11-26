@@ -15,28 +15,25 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func (r *Deployer) runDependentStacks() {
-	//push all the stackname to array
-
-}
-
 var x = 0
 
 func (r *Deployer) Run() {
 
 	var status bool = true
-	// var batchsize int
-	// var err error
 	var tempStatus = make(map[string]string)
 	var deployIndependentStacks []string
+	var m Stackgroup
+	x := make(map[string][]string)
 	for _, y := range r.config.Stacks {
 		tempStatus[y.ID] = "NOTCOMPLETED"
 		if len(y.Dependson) == 0 {
+			x[y.ID] = y.Name
+			m.stackgp = x
 			deployIndependentStacks = append(deployIndependentStacks, y.Name...)
 		}
 	}
 	r.dependent = tempStatus
-	r.executeStacks(deployIndependentStacks, &status)
+	r.executeStacks(deployIndependentStacks, &status, m)
 	for {
 		stackToExecute := make([]string, 0)
 		for _, ev := range r.config.Stacks {
@@ -44,60 +41,48 @@ func (r *Deployer) Run() {
 			//check if the id status is completed
 			if r.dependent[ev.ID] != "COMPLETED" && len(ev.Dependson) > 0 {
 				// find the ids whose dependson is completed
-
-				for x, _ := range ev.Dependson {
+				for x := range ev.Dependson {
 					i := strconv.Itoa(x + 1)
-					fmt.Println(r.dependent[i])
 					if r.dependent[i] == "COMPLETED" {
 						completed = +1
 					}
 				}
 				if completed == len(ev.Dependson) {
-					//push the stack names to array
+					x[ev.ID] = ev.Name
+					m.stackgp = x
 					stackToExecute = append(stackToExecute, ev.Name...)
 				}
-
 			}
-
 		}
 		if len(stackToExecute) <= 0 {
 			break
 		}
-
-		r.executeStacks(stackToExecute, &status)
-
+		r.executeStacks(stackToExecute, &status, m)
 	}
-
-	// 	defer checkStatus(&status)
+	defer checkStatus(&status)
 }
 
-func (r *Deployer) executeStacks(y []string, status *bool) {
-
-	if x == 0 {
-		r.dependent["1"] = "COMPLETED"
-		r.dependent["4"] = "COMPLETED"
+func (r *Deployer) executeStacks(y []string, status *bool, stackgroup Stackgroup) {
+	if len(y) > 0 {
+		var wg sync.WaitGroup
+		message := make(chan string, len(y))
+		for _, stackname := range y {
+			go r.runCdkDeploy(stackname, message, status, &stackgroup)
+			wg.Add(1)
+			go consume(message, &wg)
+		}
+		// set the status of stacks as completed
+		wg.Wait()
 	}
-	if x == 1 {
-		fmt.Println(x)
-		r.dependent["2"] = "COMPLETED"
+	defer r.checkStackCompletion(&stackgroup)
+}
+func (r *Deployer) checkStackCompletion(stackgroup *Stackgroup) {
+	for key := range stackgroup.stackgp {
+		if len(stackgroup.stackgp[key]) == 0 {
+			fmt.Println("completing the stack deployment for key", key)
+			r.dependent[key] = "COMPLETED"
+		}
 	}
-	if x == 3 {
-		r.dependent["3"] = "COMPLETED"
-	}
-	x++
-
-	// fmt.Println(x)
-
-	// if len(y) > 0 {
-	// 	var wg sync.WaitGroup
-	// 	message := make(chan string, len(y))
-	// 	for _, stackname := range y {
-	// 		go r.runCdkDeploy(stackname, message, status)
-	// 		wg.Add(1)
-	// 		go consume(message, &wg)
-	// 	}
-	// 	wg.Wait()
-	// }
 }
 
 func consume(ch <-chan string, wg *sync.WaitGroup) {
@@ -132,9 +117,19 @@ func Initialize(ctx context.Context, stacks, toolkit, environment, argsFile, bat
 	return r, nil
 }
 
-func (r *Deployer) runCdkDeploy(stackName string, message chan<- string, status *bool) {
+func remove(s []string, r string) []string {
+	for i, v := range s {
+		if v == r {
+			return append(s[:i], s[i+1:]...)
+		}
+	}
+	return s
+}
+
+func (r *Deployer) runCdkDeploy(stackName string, message chan<- string, status *bool, stackgroup *Stackgroup) {
 	log.Info("Deploying ", stackName)
 	var cdkRun = []string{"cdk", "deploy", stackName, "--require-approval", "never", "--toolkit-stack-name", *r.toolkit}
+
 	if len(r.args) > 0 {
 		cdkRun = append(cdkRun, r.args...)
 	}
@@ -143,6 +138,17 @@ func (r *Deployer) runCdkDeploy(stackName string, message chan<- string, status 
 	if err != nil {
 		log.Info(fmt.Sprint(err) + ": " + string(stdoutStderr))
 		*status = false
+	} else {
+		//loop thru the map and remove successful stack
+		var newstacks []string
+		for id, element := range stackgroup.stackgp {
+			for _, stacks := range element {
+				if stacks == stackName {
+					newstacks = remove(element, stackName)
+				}
+			}
+			stackgroup.stackgp[id] = newstacks
+		}
 	}
 	message <- string(stdoutStderr)
 	log.Info("Finished processing %s", stackName)
@@ -171,6 +177,7 @@ func getContextArgs(s []string, argsFile *string) []string {
 }
 
 func checkStatus(status *bool) {
+	log.Info(*status)
 	if !*status {
 		log.Fatal("Some of the stacks failed, please visit logs")
 	} else {
