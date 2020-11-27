@@ -7,7 +7,6 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
-	"strconv"
 	"strings"
 	"sync"
 
@@ -15,24 +14,21 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-var x = 0
-
 func (r *Deployer) Run() {
-
 	var status bool = true
-	var tempStatus = make(map[string]string)
+	var currentStatus = make(map[string]string)
 	var deployIndependentStacks []string
 	var m Stackgroup
 	x := make(map[string][]string)
 	for _, y := range r.config.Stacks {
-		tempStatus[y.ID] = "NOTCOMPLETED"
+		currentStatus[y.ID] = "NOTCOMPLETED"
 		if len(y.Dependson) == 0 {
 			x[y.ID] = y.Name
-			m.stackgp = x
 			deployIndependentStacks = append(deployIndependentStacks, y.Name...)
 		}
 	}
-	r.dependent = tempStatus
+	m.stackgp = x
+	r.dependent = currentStatus
 	r.executeStacks(deployIndependentStacks, &status, m)
 	for {
 		stackToExecute := make([]string, 0)
@@ -41,10 +37,9 @@ func (r *Deployer) Run() {
 			//check if the id status is completed
 			if r.dependent[ev.ID] != "COMPLETED" && len(ev.Dependson) > 0 {
 				// find the ids whose dependson is completed
-				for x := range ev.Dependson {
-					i := strconv.Itoa(x + 1)
-					if r.dependent[i] == "COMPLETED" {
-						completed = +1
+				for _, y := range ev.Dependson {
+					if r.dependent[y.(string)] == "COMPLETED" {
+						completed++
 					}
 				}
 				if completed == len(ev.Dependson) {
@@ -54,28 +49,36 @@ func (r *Deployer) Run() {
 				}
 			}
 		}
-		if len(stackToExecute) <= 0 {
+		if len(stackToExecute) > 0 {
+			r.executeStacks(stackToExecute, &status, m)
+		} else {
 			break
 		}
-		r.executeStacks(stackToExecute, &status, m)
 	}
 	defer checkStatus(&status)
 }
 
-func (r *Deployer) executeStacks(y []string, status *bool, stackgroup Stackgroup) {
-	if len(y) > 0 {
-		var wg sync.WaitGroup
-		message := make(chan string, len(y))
-		for _, stackname := range y {
-			go r.runCdkDeploy(stackname, message, status, &stackgroup)
-			wg.Add(1)
-			go consume(message, &wg)
+func checkStringExists(slice []string, val string) (int, bool) {
+	for i, item := range slice {
+		if item == val {
+			return i, true
 		}
-		// set the status of stacks as completed
-		wg.Wait()
 	}
+	return -1, false
+}
+
+func (r *Deployer) executeStacks(y []string, status *bool, stackgroup Stackgroup) {
+	var wg sync.WaitGroup
+	message := make(chan string, len(y))
+	for _, stackname := range y {
+		go r.runCdkDeploy(stackname, message, status, &stackgroup)
+		wg.Add(1)
+		go consume(message, &wg)
+	}
+	wg.Wait()
 	defer r.checkStackCompletion(&stackgroup)
 }
+
 func (r *Deployer) checkStackCompletion(stackgroup *Stackgroup) {
 	for key := range stackgroup.stackgp {
 		if len(stackgroup.stackgp[key]) == 0 {
