@@ -8,10 +8,11 @@ type Deployer struct {
 	ctx         context.Context
 	config      *Config
 	toolkit     *string
-	environment *string
 	args        []string
 	batch       *string
 	dependent   map[string]string
+	prefix      *string
+	failedStack []string
 }
 
 type Processing struct {

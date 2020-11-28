@@ -9,12 +9,13 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/alessio/shellescape"
 	log "github.com/sirupsen/logrus"
 )
 
-func (r *Deployer) Run() {
+func (r *Deployer) Deploy() {
 	var status bool = true
 	var currentStatus = make(map[string]string)
 	var deployIndependentStacks []string
@@ -29,7 +30,7 @@ func (r *Deployer) Run() {
 	}
 	m.stackgp = x
 	r.dependent = currentStatus
-	r.executeStacks(deployIndependentStacks, &status, m)
+	r.deployStacks(deployIndependentStacks, &status, m)
 	for {
 		stackToExecute := make([]string, 0)
 		for _, ev := range r.config.Stacks {
@@ -50,30 +51,23 @@ func (r *Deployer) Run() {
 			}
 		}
 		if len(stackToExecute) > 0 {
-			r.executeStacks(stackToExecute, &status, m)
+			r.deployStacks(stackToExecute, &status, m)
 		} else {
 			break
 		}
 	}
-	defer checkStatus(&status)
+	defer r.checkStatus(&status)
 }
 
-func checkStringExists(slice []string, val string) (int, bool) {
-	for i, item := range slice {
-		if item == val {
-			return i, true
-		}
-	}
-	return -1, false
-}
-
-func (r *Deployer) executeStacks(y []string, status *bool, stackgroup Stackgroup) {
+func (r *Deployer) deployStacks(y []string, status *bool, stackgroup Stackgroup) {
 	var wg sync.WaitGroup
 	message := make(chan string, len(y))
 	for _, stackname := range y {
 		go r.runCdkDeploy(stackname, message, status, &stackgroup)
 		wg.Add(1)
-		go consume(message, &wg)
+		go Consume(message, &wg)
+		// wait for 1 sec so that we do  not hit aws cloudformation api limit
+		time.Sleep(2 * time.Second)
 	}
 	wg.Wait()
 	defer r.checkStackCompletion(&stackgroup)
@@ -82,18 +76,12 @@ func (r *Deployer) executeStacks(y []string, status *bool, stackgroup Stackgroup
 func (r *Deployer) checkStackCompletion(stackgroup *Stackgroup) {
 	for key := range stackgroup.stackgp {
 		if len(stackgroup.stackgp[key]) == 0 {
-			fmt.Println("completing the stack deployment for key", key)
 			r.dependent[key] = "COMPLETED"
 		}
 	}
 }
 
-func consume(ch <-chan string, wg *sync.WaitGroup) {
-	defer wg.Done()
-	println("Result of stack ", <-ch)
-}
-
-func Initialize(ctx context.Context, stacks, toolkit, environment, argsFile, batch *string) (*Deployer, error) {
+func Initialize(ctx context.Context, stacks, toolkit, argsFile, prefix *string) (*Deployer, error) {
 	var runStack Config
 	stackConfig, err := ioutil.ReadFile(*stacks)
 	if err != nil {
@@ -110,29 +98,24 @@ func Initialize(ctx context.Context, stacks, toolkit, environment, argsFile, bat
 		s = getContextArgs(s, argsFile)
 	}
 	r := &Deployer{
-		ctx:         ctx,
-		config:      &runStack,
-		toolkit:     toolkit,
-		environment: environment,
-		args:        s,
-		batch:       batch,
+		ctx:     ctx,
+		config:  &runStack,
+		toolkit: toolkit,
+		args:    s,
+		prefix:  prefix,
 	}
 	return r, nil
 }
 
-func remove(s []string, r string) []string {
-	for i, v := range s {
-		if v == r {
-			return append(s[:i], s[i+1:]...)
-		}
-	}
-	return s
-}
-
 func (r *Deployer) runCdkDeploy(stackName string, message chan<- string, status *bool, stackgroup *Stackgroup) {
-	log.Info("Deploying ", stackName)
-	var cdkRun = []string{"cdk", "deploy", stackName, "--require-approval", "never", "--toolkit-stack-name", *r.toolkit}
-
+	var deployStack string
+	if *r.prefix != "" {
+		deployStack = *r.prefix + "-" + stackName
+	} else {
+		deployStack = stackName
+	}
+	log.Info("Deploying ", deployStack)
+	var cdkRun = []string{"cdk", "deploy", deployStack, "--require-approval", "never", "--toolkit-stack-name", *r.toolkit}
 	if len(r.args) > 0 {
 		cdkRun = append(cdkRun, r.args...)
 	}
@@ -141,20 +124,21 @@ func (r *Deployer) runCdkDeploy(stackName string, message chan<- string, status 
 	if err != nil {
 		log.Info(fmt.Sprint(err) + ": " + string(stdoutStderr))
 		*status = false
+		r.failedStack = append(r.failedStack, deployStack)
 	} else {
 		//loop thru the map and remove successful stack
 		var newstacks []string
 		for id, element := range stackgroup.stackgp {
 			for _, stacks := range element {
 				if stacks == stackName {
-					newstacks = remove(element, stackName)
+					newstacks = Remove(element, stackName)
 				}
 			}
 			stackgroup.stackgp[id] = newstacks
 		}
 	}
 	message <- string(stdoutStderr)
-	log.Info("Finished processing %s", stackName)
+	log.Info("Finished deploying", stackName)
 }
 
 func getContextArgs(s []string, argsFile *string) []string {
@@ -179,10 +163,9 @@ func getContextArgs(s []string, argsFile *string) []string {
 	return s
 }
 
-func checkStatus(status *bool) {
-	log.Info(*status)
+func (r *Deployer) checkStatus(status *bool) {
 	if !*status {
-		log.Fatal("Some of the stacks failed, please visit logs")
+		log.Fatal("some of the stacks failed %s, please visit logs", r.failedStack)
 	} else {
 		log.Info("Successful execution of stacks")
 	}
