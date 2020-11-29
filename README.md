@@ -63,5 +63,5 @@ cdkctl deploy --stacks-file example-configs/stacks-dependent.json --tool-kit too
 4.Destroy all the stacks
 
 ```bash
-cdkctl deploy --stacks-file example-configs/stacks-all.json --tool-kit toolkit-name
+cdkctl destroy --stacks-file example-configs/stacks-all.json --tool-kit toolkit-name
 ```
