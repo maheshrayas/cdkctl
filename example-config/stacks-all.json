@@ -1,0 +1,6 @@
+{
+    "stacks": [
+      { "id": "1", "name": ["stackname1","stackname2", "stackname3","stackname4", "stackname5","stackname6", "stackname7"]},
+      { "id": "2", "name": ["stackname8","stackname9"]}
+    ]
+  }
