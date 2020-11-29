@@ -1,0 +1,8 @@
+{
+  "stacks": [
+    { "id": "1", "name": ["stackname1"]},
+    { "id": "2", "name": ["stackname2", "stackname3"], "dependson": ["1"] },
+    { "id": "3", "name": ["stackname4", "stackname5"], "dependson": ["1", "2"] },
+    { "id": "4", "name": ["stackname6", "stackname7"], "dependson": [] }
+  ]
+}
