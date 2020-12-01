@@ -31,7 +31,7 @@ Use the following to be able to install on MacOS or Linux:
 
 ### Install on Windows & Linux
 
-* Download the latest release from https://github.com/maheshrayas/cdkctl/releases/tag/v.0.1.0
+* Download the latest release from https://github.com/maheshrayas/cdkctl/releases/tag/v.0.2.0
 * Unpack and set the binary in the `PATH`
 * For windows, rename the binary to `cdkctl.exe`
 
