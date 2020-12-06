@@ -65,8 +65,8 @@ func (r *Deployer) deployStacks(y []string, status *bool, stackgroup Stackgroup)
 	for _, stackname := range y {
 		go r.runCdkDeploy(stackname, message, status, &stackgroup)
 		wg.Add(1)
-		go Consume(message, &wg)
-		// wait for 1 sec so that we do  not hit aws cloudformation api limit
+		go Consume(message, &wg, *r.prefix+"-"+stackname, "Deploying")
+		// wait for 2 sec so that we do  not hit aws cloudformation api limit
 		time.Sleep(2 * time.Second)
 	}
 	wg.Wait()
@@ -114,7 +114,6 @@ func (r *Deployer) runCdkDeploy(stackName string, message chan<- string, status 
 	} else {
 		deployStack = stackName
 	}
-	log.Info("Deploying ", deployStack)
 	var cdkRun = []string{"cdk", "deploy", deployStack, "--require-approval", "never", "--toolkit-stack-name", *r.toolkit}
 	if len(r.args) > 0 {
 		cdkRun = append(cdkRun, r.args...)
@@ -138,7 +137,7 @@ func (r *Deployer) runCdkDeploy(stackName string, message chan<- string, status 
 		}
 	}
 	message <- string(stdoutStderr)
-	log.Info("Finished deploying", stackName)
+	log.Info("Finished deploying : ", stackName)
 }
 
 func getContextArgs(s []string, argsFile *string) []string {
