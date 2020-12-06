@@ -29,8 +29,8 @@ func (r *Deployer) destroy(y []string, status *bool) {
 	for _, stackname := range y {
 		go r.runCdkDestroy(stackname, message, status)
 		wg.Add(1)
-		go Consume(message, &wg)
-		// wait for 1 sec so that we do  not hit aws cloudformation api limit
+		go Consume(message, &wg, *r.prefix+"-"+stackname, "Deleting")
+		// wait for 2 sec so that we do  not hit aws cloudformation api limit
 		time.Sleep(2 * time.Second)
 	}
 	wg.Wait()
@@ -53,5 +53,5 @@ func (r *Deployer) runCdkDestroy(stackName string, message chan<- string, status
 		r.failedStack = append(r.failedStack, deployStack)
 	}
 	message <- string(stdoutStderr)
-	log.Info("Finished destroying", stackName)
+	log.Info("Finished destroying : ", stackName)
 }
