@@ -14,10 +14,9 @@ Use the following to be able to install on MacOS or Linux:
 
 ### Install using `make`
 
-1. Clone the repo, 
+1. Clone the repo
 2. Make sure you have go > go1.14.2 installed
 3. Run `make local`
-
 
 ### Install using `brew`
 
